@@ -1,9 +1,11 @@
 # Import Python packages
 import streamlit as st
+import pandas as pd
+import requests
 from snowflake.snowpark.functions import col
 
 # App title and description
-st.title("🥤Customize Your Smoothie Cup🥤")
+st.title("🥤 Customize Your Smoothie Cup 🥤")
 st.write("Choose the fruits you want in your custom smoothie!")
 
 # Get active Snowflake session
@@ -34,29 +36,38 @@ if ingredients_list:
     ingredients_string = ", ".join(ingredients_list)
     st.write("You chose:", ingredients_string)
 
-    # Build SQL safely with parameters
+    # 🍓 Fetch nutrition info for selected fruits dynamically
+    fruit_data = []
+    for fruit_chosen in ingredients_list:
+        st.subheader(f"{fruit_chosen} Nutrition Information")
+
+        try:
+            response = requests.get(f"https://my.smoothiefroot.com/api/fruit/{fruit_chosen.lower()}")
+            if response.status_code == 200:
+                data = response.json()
+                data["fruit_name"] = fruit_chosen
+                fruit_data.append(data)
+            else:
+                st.warning(f"⚠️ Could not retrieve data for {fruit_chosen}.")
+        except Exception as e:
+            st.warning(f"⚠️ Error fetching data for {fruit_chosen}: {e}")
+
+    # Combine and display nutrition info
+    if fruit_data:
+        df = pd.DataFrame(fruit_data)
+        st.subheader("🍇 Combined Nutrition Info")
+        st.dataframe(df, use_container_width=True)
+
+    # 🍹 Submit order to Snowflake
     if st.button("Submit Order"):
         try:
             session.sql(
                 "INSERT INTO smoothies.public.orders (INGREDIENTS, NAME_ON_ORDER) VALUES (?, ?)",
                 params=[ingredients_string, name_on_order]
             ).collect()
-
             st.success("✅ Your Smoothie has been ordered!")
         except Exception as e:
-            st.error(f"❌ Something went wrong: {e}")
+            st.error(f"❌ Something went wrong while saving order: {e}")
+
 else:
     st.info("Please select up to 5 ingredients to create your smoothie.")
-
-import requests
-
-# Call the SmoothieFroot API
-smoothiefroot_response = requests.get("https://my.smoothiefroot.com/api/fruit/watermelon")
-
-# Convert JSON response to a DataFrame for display
-if smoothiefroot_response.status_code == 200:
-    sf_df = smoothiefroot_response.json()
-    st.dataframe(data=sf_df, use_container_width=True)
-else:
-    st.error("❌ Failed to fetch fruit data from the SmoothieFroot API.")
-
