@@ -3,7 +3,7 @@ import streamlit as st
 from snowflake.snowpark.functions import col
 
 # App title and description
-st.title("🥤 Customize Your Smoothie Cup 🥤")
+st.title("🥤Customize Your Smoothie Cup🥤")
 st.write("Choose the fruits you want in your custom smoothie!")
 
 # Get active Snowflake session
