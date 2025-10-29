@@ -4,7 +4,7 @@ from snowflake.snowpark.functions import col
 import requests
 
 # App title and description
-st.title("🥤Customize Your Smoothie Cup🥤")
+st.title("🥤 Customize Your Smoothie Cup 🥤")
 st.write("Choose the fruits you want in your custom smoothie!")
 
 # Get active Snowflake session
@@ -17,11 +17,11 @@ if name_on_order:
     st.write("The name of the smoothie:", name_on_order)
 
 # Fetch fruit options from Snowflake
-fruit_df = session.table("smoothies.public.fruit_options").select(col("FRUIT_NAME"))
-fruit_list = [row["FRUIT_NAME"] for row in fruit_df.collect()]  # Convert to Python list
+my_dataframe = session.table("smoothies.public.fruit_options").select(col("FRUIT_NAME"), col("SEARCH_ON"))
+fruit_list = [row["FRUIT_NAME"] for row in my_dataframe.collect()]  # Convert to Python list
 
 # Show available fruits
-st.dataframe(data=fruit_df, use_container_width=True)
+st.dataframe(data=my_dataframe, use_container_width=True)
 
 # Multiselect for ingredients
 ingredients_list = st.multiselect(
@@ -35,33 +35,35 @@ if ingredients_list:
     ingredients_string = ", ".join(ingredients_list)
     st.write("You chose:", ingredients_string)
 
-    # Build SQL safely with parameters
+    # Submit order button
     if st.button("Submit Order"):
         try:
             session.sql(
                 "INSERT INTO smoothies.public.orders (INGREDIENTS, NAME_ON_ORDER) VALUES (?, ?)",
                 params=[ingredients_string, name_on_order]
             ).collect()
-
             st.success("✅ Your Smoothie has been ordered!")
         except Exception as e:
             st.error(f"❌ Something went wrong: {e}")
-else:
-    st.info("Please select up to 5 ingredients to create your smoothie.")
 
-# Show nutrition info for each selected fruit separately
-if ingredients_list:
-    ingredients_string = ''
+    # Convert Snowpark DataFrame to Pandas for lookup
+    pd_df = my_dataframe.to_pandas()
+
+    # Loop through selected fruits and show nutrition info
     for fruit_chosen in ingredients_list:
-        ingredients_string += fruit_chosen + ' '
+        # Get the SEARCH_ON value for the chosen fruit
+        search_on = pd_df.loc[pd_df['FRUIT_NAME'] == fruit_chosen, 'SEARCH_ON'].iloc[0]
+        st.write(f"The search value for {fruit_chosen} is {search_on}.")
+        
+        # Display fruit nutrition info
         st.subheader(f"{fruit_chosen} Nutrition Information")
-
-        # Fetch data for each fruit
-        smoothiefroot_response = requests.get("https://my.smoothiefroot.com/api/fruit/" + fruit_chosen.lower())
-
-        # Display as individual table
-        if smoothiefroot_response.status_code == 200:
-            sf_df = smoothiefroot_response.json()
-            st.dataframe(data=sf_df, use_container_width=True)
+        fruityvice_response = requests.get("https://fruityvice.com/api/fruit/" + search_on)
+        
+        if fruityvice_response.status_code == 200:
+            fruityvice_df = fruityvice_response.json()
+            st.dataframe(data=fruityvice_df, use_container_width=True)
         else:
             st.error(f"❌ Failed to fetch data for {fruit_chosen}")
+
+else:
+    st.info("Please select up to 5 ingredients to create your smoothie.")
