@@ -49,6 +49,14 @@ else:
     st.info("Please select up to 5 ingredients to create your smoothie.")
 
 import requests
+
+# Call the SmoothieFroot API
 smoothiefroot_response = requests.get("https://my.smoothiefroot.com/api/fruit/watermelon")
-#st.text(smoothiefroot_response.json())
-sf_df st.dataframe(data=smoothiefroot_response.json(), use_container_width=True)
+
+# Convert JSON response to a DataFrame for display
+if smoothiefroot_response.status_code == 200:
+    sf_df = smoothiefroot_response.json()
+    st.dataframe(data=sf_df, use_container_width=True)
+else:
+    st.error("❌ Failed to fetch fruit data from the SmoothieFroot API.")
+
