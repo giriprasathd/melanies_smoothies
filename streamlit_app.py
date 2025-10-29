@@ -7,8 +7,8 @@ st.title("🥤 Customize Your Smoothie Cup 🥤")
 st.write("Choose the fruits you want in your custom smoothie!")
 
 # Get active Snowflake session
-session = st.connection("snowflake")
-session = conn.session()
+conn = st.connection("snowflake")   # create connection
+session = conn.session()            # get Snowpark session
 
 # Input: Smoothie name
 name_on_order = st.text_input("Name your smoothie")
