@@ -8,6 +8,7 @@ st.write("Choose the fruits you want in your custom smoothie!")
 
 # Get active Snowflake session
 session = st.connection("snowflake")
+session = conn.session()
 
 # Input: Smoothie name
 name_on_order = st.text_input("Name your smoothie")
