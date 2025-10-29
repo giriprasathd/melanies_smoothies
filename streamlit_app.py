@@ -8,65 +8,71 @@ from snowflake.snowpark.functions import col
 st.title("🥤 Customize Your Smoothie Cup 🥤")
 st.write("Choose the fruits you want in your custom smoothie!")
 
-# Create Snowflake connection
-conn = st.connection("snowflake")
-session = conn.session()
+# Get active Snowflake session
+conn = st.connection("snowflake")   # create connection
+session = conn.session()            # get Snowpark session
 
 # Input: Smoothie name
 name_on_order = st.text_input("Name your smoothie")
 if name_on_order:
     st.write("The name of the smoothie:", name_on_order)
 
-# Fetch fruit options (FRUIT_NAME + SEARCH_ON)
-my_dataframe = session.table("smoothies.public.fruit_options").select(
-    col("FRUIT_NAME"),
-    col("SEARCH_ON")
-)
+# Fetch fruit options (with SEARCH_ON) from Snowflake
+fruit_df = session.table("smoothies.public.fruit_options").select(col("FRUIT_NAME"), col("SEARCH_ON"))
+fruit_list = [row["FRUIT_NAME"] for row in fruit_df.collect()]  # Convert to Python list
 
-# Convert to Pandas so we can display in Streamlit
-pd_df = my_dataframe.to_pandas()
+# Show available fruits
+st.dataframe(data=fruit_df, use_container_width=True)
 
-# ✅ Show both FRUIT_NAME and SEARCH_ON columns in Streamlit
-st.subheader("🍓 Available Fruits and Their API Search Values")
-st.dataframe(pd_df, use_container_width=True)
-
-# Multiselect for fruit selection
+# Multiselect for ingredients
 ingredients_list = st.multiselect(
     "Choose up to 5 ingredients:",
-    pd_df["FRUIT_NAME"].tolist(),
+    fruit_list,
     max_selections=5
 )
 
-# When fruits are selected
 if ingredients_list:
-    ingredients_string = ", ".join(ingredients_list)
-    st.write("You chose:", ingredients_string)
+    # Convert Snowpark DataFrame to Pandas for easy lookup
+    pd_df = fruit_df.to_pandas()
 
-    # Submit button to store order
-    if st.button("Submit Order"):
-        try:
-            session.sql(
-                """
-                INSERT INTO smoothies.public.orders (INGREDIENTS, NAME_ON_ORDER)
-                VALUES (?, ?)
-                """,
-                params=[ingredients_string, name_on_order]
-            ).collect()
-            st.success("✅ Your smoothie has been ordered!")
-        except Exception as e:
-            st.error(f"❌ Something went wrong: {e}")
+    # Clean ingredient names
+    clean_ingredients = [fruit.strip() for fruit in ingredients_list]
 
-    # For each fruit, show nutrition information
-    for fruit_chosen in ingredients_list:
-        search_on = pd_df.loc[pd_df["FRUIT_NAME"] == fruit_chosen, "SEARCH_ON"].iloc[0]
+    # Format ingredients like 'Apples','Lime','Ximenia'
+    ingredients_string = ",".join(f"'{fruit}'" for fruit in clean_ingredients)
+
+    # Display info for each fruit
+    for fruit_chosen in clean_ingredients:
+        # Fetch corresponding search name
+        search_on = pd_df.loc[pd_df['FRUIT_NAME'] == fruit_chosen, 'SEARCH_ON'].iloc[0]
+
+        st.write(f"🔍 The search value for **{fruit_chosen}** is **{search_on}**")
         st.subheader(f"{fruit_chosen} Nutrition Information")
 
+        # FruityVice API call using SEARCH_ON
         fruityvice_response = requests.get(f"https://fruityvice.com/api/fruit/{search_on}")
 
         if fruityvice_response.status_code == 200:
-            data = fruityvice_response.json()
-            st.json(data)
+            fruityvice_normalized = pd.json_normalize(fruityvice_response.json())
+            st.dataframe(fruityvice_normalized, use_container_width=True)
         else:
             st.error(f"❌ Failed to fetch data for {fruit_chosen}")
+
+    # Show formatted ingredients
+    st.write("🧾 Ingredients string (for SQL insert):")
+    st.code(ingredients_string)
+
+    # When user submits order
+    if st.button("Submit Order"):
+        try:
+            # Insert into orders table safely
+            session.sql(
+                "INSERT INTO smoothies.public.orders (INGREDIENTS, NAME_ON_ORDER) VALUES (?, ?)",
+                params=[ingredients_string, name_on_order]
+            ).collect()
+            st.success("✅ Your Smoothie has been ordered!")
+        except Exception as e:
+            st.error(f"❌ Something went wrong: {e}")
+
 else:
     st.info("Please select up to 5 ingredients to create your smoothie.")
